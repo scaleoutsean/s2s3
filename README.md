@@ -41,7 +41,18 @@ TODO
 
 ## Verify
 
-TODO
+S2S3 doesn't enumerate S3 for migration, but if we want to compare the source (NAS share) and target (S3 bucket), it has to enumerate the bucket as well.
+
+Example for prefix-based enumeration on StorageGRID 12.1 or Versity S3 Gateway 1.9.0:
+
+```sh
+$ s2s3 inventory s3://<bucket>/<prefix>/ \
+  --s3-endpoint https://host:port \
+  --s3-path-style --timeout 30s \
+  --db <inventory-dir>
+```
+
+Omit prefix for full bucket enumeration.
 
 ## Privacy and T&C
 
