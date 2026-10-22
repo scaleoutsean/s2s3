@@ -4,7 +4,16 @@ S2S3 can help you quickly migrate small-to-medium NFSv3 shares to NetApp Storage
 and Versity S3 Gateway with E-Series. It is also very affordable - download it for free 
 from Releases.
 
-Initial implementation supports NFSv3.
+Initial implementation supports NFSv3 sources.
+
+## Workflow
+
+- Calibrate to find optimal number of threads
+- Initial sync
+- Incremental sync (one or more)
+- Final sync from NAS (read-only exports)
+- Verification
+- Switch-over (ACLs expanded to allow other users)
 
 ## Build inventory
 
