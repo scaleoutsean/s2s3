@@ -426,9 +426,9 @@ rclone check \
   --log-file ./rclone-check.log
 ```
 
-You may want to create a bucket for these reports (e.g. `s3://migration-reports`, with Versioning and Object Lock) and upload reports there to mark migration completed and keep track of the switch-over state. 
+You may want to create a bucket for these reports (e.g. `s3://migration-reports`, with Versioning and Object Lock) and upload reports there to mark migration completed and keep a record of switch-over state. 
 
-If you enabled Versioning or ILM on the bucket before migration was done (not recommended, but may be required), you may already have changes (versions, deletes, even reads) which require tracking for compliance, so get the StorageGRID audit log for the bucket and upload it to the bucket together with other hand-over documentation, reports and logs.
+If you've enabled Versioning or ILM on the bucket *before* migration was done (not recommended, but may be required), you may already have non-trivial changes (versions, deletes, reads) in audit logs which may require tracking for compliance, so get the StorageGRID audit log for the bucket and upload it to the bucket together with other hand-over documentation, reports and logs. You can use [SGAC](https://github.com/scaleoutsean/storagegrid-audit-analysis) or your own script to keep entries relevant to the migrated bucket as well as raw data.
 
 ## Other notes
 
