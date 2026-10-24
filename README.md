@@ -317,7 +317,7 @@ Another example: if your application requires or uses Versioning or Object Lock,
 - Good: use a test bucket for pre-switch-over testing. Enable Versioning, Object Lock, ILM when it suits your business requirements.
 - **Bad:** enable Versioning for testing during migration iterations, prepare scripts to delete non-current versions before switch-over, and let ILM cleanse them. Use `rclone copy` to overwrite changed or new objects.
 
-Even if you use `rclone sync` (i.e. not one-shot copy), if Versioning or Compliance is enabled early on, you can end up with multiple versions of objects that you don't want - maybe they take up TBs of space and you already have them in NAS snapshots - or may be undesirable - but you cannot delete them.
+Even if you use `rclone sync` (i.e. not one-shot copy), if Versioning or Compliance Mode are enabled before switch-over you can end up with versions of objects that you don't want - maybe they take up TBs of space - or may be undesirable - but you won't be able to delete them. You also won't be able to remove the bucket (due to Compliance mode).
 
 ## Verify
 
