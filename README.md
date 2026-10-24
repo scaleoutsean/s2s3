@@ -10,7 +10,7 @@
     - [NFS v3 inventory](#nfs-v3-inventory)
     - [S3 inventory](#s3-inventory)
     - [Pre-flight checks](#pre-flight-checks)
-    - [Build after initial sync](#build-after-initial-sync)
+    - [Build inventory after initial copy](#build-inventory-after-initial-copy)
     - [SMB inventory](#smb-inventory)
   - [Copy NAS data to S3](#copy-nas-data-to-s3)
     - [Initial copy](#initial-copy)
@@ -46,20 +46,24 @@ As shown in the diagram, copy/sync operations are handled by an external utility
 
 S2S3 can implement copying, but that would reduce its flexibility. Flexibility seems more valuable than convenience, but convenience is retained by using one reference tool with canned examples for common workflows included in the S2S3 documentation. 
 
+Why not just use Rclone? Rcone is more powerful, but it's also overwhelming. I want a handful clear steps without 50 options for each. Also, S2S3 does use Rclone, just not for the steps where Rclone is overkill.
+
 ## Scale
 
 - NAS and S3 are expected to handle S2S3's requests
 - S2S3 tested for key client-side characteristics:
-  - Enumerate NAS shares with many millions of files
-  - Enumerate single NAS share with 500,000 files
-  - Enumerate buckets with millions of objects
+  - Enumerate a NAS share with many millions of files
+  - Enumerate a NAS directory with 500,000 files
+  - Enumerate a bucket with millions of objects
   - Database/dataset operations are relatively light and not specifically tested for performance and scale
 
-Even at a small scale, inventory building (i.e. "share enumeration" and "bucket listing") speed is 8,000 files (NFS) and 3,000 objects (S3) per second.
+Even at a small scale, S2S3's inventory building (i.e. "share enumeration" and "bucket listing") speed is 8,000 files (NFS) and 3,000 objects (S3) per second.
 
-Copy/sync performance depends on Rclone, not on S2S3, but in reality it is usually constrained by the source or target.
+Copy/sync performance depends on Rclone, not on S2S3, but in reality it is usually constrained by source and target performance.
 
-S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each inventory is independent of all others. It will take a long time to enumerate large buckets (especially if the object store is slower than S2S3) and very large directories, but it should complete jobs in non-extreme scenarios.
+S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each source-destination pair is independent of others. It takes a long time to enumerate large buckets (especially if the object store is slower than S2S3 client) and very large directories, but it should complete enumeration within scenarios outlined above.
+
+Some extra musings can be [found in my inaugural S2S3 blog post](http://scaleoutsean.github.io/2026/10/22/s2s3-share-to-s3-tool.html).
 
 ## Workflow
 
@@ -72,16 +76,17 @@ S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems 
 
 ## Calibrate source and target
 
-On the client, S2S3's work is cheap, but server work is not. You need to carefully consider the workload S2S3 creates:
-- Source: directory listing (inventory), reads (copy/sync)
-- Target: Put (and some delete) workload (copy/sync), bucket enumeration (inventory, comparison, report)
-- S2S3 client: small workload (write/read Parquet DB files)
+On the client, S2S3's work is cheap. Servers' work is not. You need to carefully consider the workload S2S3 creates:
 
-**NFS:** S2S3 lets you specify the number of threads used for scanning. Two is usually enough (lab testing shows 8,000 files listed per second), but can impact other workloads. Rclone lets you specify the number of threads used in copy/sync operations. 
+- On source: directory listing (inventory), reads (copy/sync)
+- On sarget: Put (and some delete) workload (copy/sync), bucket enumeration (inventory, comparison, report)
+- On S2S3 client: small workload (write/read Parquet DB files)
 
-**S3:** S2S3 enumeration of S3 buckets is single-threaded and lab results show around 3,000 objects listed per second. If that level can impact your StorageGRID, ask your StorageGRID admin or other infrastructure person to configure [Traffic Classification](https://docs.netapp.com/us-en/storagegrid/admin/managing-traffic-classification-policies.html) for the S2S3 (tenant) account, the S2S3 IP, the bucket(s)...
+**NFS:** S2S3 lets you specify the number of threads used to scan a NAS share. Two is usually enough (lab testing shows 8,000 files listed per second), but can impact other NAS workloads, so try one thread as the minimum and evaluate more as necessary. Rclone, used to read data from the source (NAS share) lets you specify the number of threads used in copy/sync/verify`q operations. 
 
-**End-to-end:** Inventories are built separately, so the are independent. For copy/sync, find balanced settings that works well with both the source and destination. Put operations to S3 are likely going to be slower than NFS reads (especially with sub-1MiB NFS files), so Rclone shouldn't try to push harder than necessary - it won't work anyway.
+**S3:** S2S3's enumeration of S3 buckets is single-threaded and lab results show around 3,000 objects listed per second. If that level can impact your StorageGRID, ask your StorageGRID admin or other infrastructure person to configure [Traffic Classification](https://docs.netapp.com/us-en/storagegrid/admin/managing-traffic-classification-policies.html) for the S2S3 (tenant) account, the S2S3 IP, the bucket(s)...
+
+**End-to-end:** Inventories are built separately, so the are independent. For copy/sync, find balanced settings that work well with both the source and destination of migration. Put operations to S3 are likely going to be slower than NFS reads (especially with sub-1MiB NFS files), so Rclone shouldn't try to push harder than necessary - it won't work anyway.
 
 ## Build inventory
 
@@ -89,7 +94,7 @@ Source NAS share must be inventoried first. S3 inventory not until after the fir
 
 ### Data set naming conventions
 
-We use `--db <path>` to specify the location of an inventory database. It is suggested to employ a convention (e.g. `<nas_ip>_<share_name>_<datetime>_<ref>` and `<s3-api>_<bucket_name>_<datetime>-<ref>`).
+We use `--db <path>` to specify the location of an inventory database. It is suggested to employ a convention before starting a multi-step process (e.g. `<nas_ip>_<share_name>_<datetime>_<ref>` and `<s3-api>_<bucket_name>_<datetime>-<ref>`).
 
 A date string (e.g. 2026-10-28-14) gives you an idea when the scan was performned, and your reference is an extra for easier identification.
 
@@ -152,16 +157,14 @@ s2s3 preflight s3://bucket/prefix --mode sync
 To build an inventory you just need to be able to `list`. Later, as we copy and sync, we will need more.
 
 **IMPORTANT NOTES:** 
-- Non-S2S3 users should at most have list access, with correct ACLs (not wide open to Anonymous or "any tenant account/user"). Use tenant root or designated migration account for S2S3
+
+- Use tenant root or designated migration account for S2S3.
+- Non-S2S3 users should have very limited access - best none at all - to destination bucket during migration, with appropriate ACLs (not be wide-open to Anonymous or "any tenant account/user") issued to a different account (not the tenant admin or S23 user).
 - You should also read **Copy vs. Sync** below, before you begin.
 
-### Build after initial sync
+### Build inventory after initial copy
 
 We don't need to build inventory of an empty bucket, so we'd do this only *after the first copy* from NAS to S3 has completed.
-
-Normally, we'd inventory an entire bucket, but you can also perform prefix-based enumeration in case you are focused on particular path in the bucket (especially between iterative sync operations later on).
-
-Prefix-based enumeration on StorageGRID 12.1 or Versity S3 Gateway 1.9.0:
 
 ```sh
 # load S3 creds from .env or add AWS_ACCESS_KEY_ID=<str> AWS_SECRET_ACCESS_KEY=<str>
@@ -171,26 +174,24 @@ s2s3 inventory s3://<bucket>/<prefix>/ \
   --db <inventory-dir>
 ```
 
-Notice there's no `sudo` here. S3 doesn't require it.
-
-S2S3 needs the S3 credentials (that's not optional). The port for StorageGRID is usually 10443 and Versity S3 Gateway 7070. Do not use HTTP as not just TBs of data could leak, but your credentials could be compromised as well.
+S2S3 needs the S3 credentials (that's not optional and should be verified with pre-flight checks). HTTPS port for StorageGRID S3 API is usually 10443 and Versity S3 Gateway defaults to 7070. Do not use HTTP here as not just TBs of data could leak, but your credentials could end up compromised as well.
 
 ### SMB inventory
 
-SMB is not yet implemented. It may be, depending on opportunities.
+SMB is not yet implemented. It may be in the future, depending on opportunities.
 
 ## Copy NAS data to S3
 
-As mentioned at the top, S2S3 can give you lists of what needs to be copied (and deleted, if files have been deleted from the source). 
+As mentioned at the top, S2S3 can give you lists of files that need to be copied (or deleted, if files have been deleted from the source). 
 
-In Rclone and in the context of S2S3, there are two kinds, although you can use one:
+In Rclone, in the context of S2S3, there are two kinds although you can use just one:
 
 - Copy: copies NAS share over S3 bucket contents.
 - Sync: propagates changes from NAS share to S3.
 
-We want to use copy the first time - since the destination bucket is empty, it won't be different from sync, but later on it is less resource-intensive to use `sync`.
+We want to use `copy` first - since the destination bucket is empty, it won't be different from `sync` - but later on, it is less resource-intensive to use `sync`.
 
-Subsequently we can avoid re-copying of all NAS share content by using `sync`. "Conservative" users may use `copy` throughout, but iterative migrations done this way take longer.
+Subsequently, we can avoid re-copying of all NAS share content by using `sync`. "Conservative" users may use `copy` throughout, but iterative migrations done this way take longer.
 
 Before you can either copy or sync, you need to mount the source NAS share. On Linux, that could be a path in your own directory. Examples below use `/tmp` which is convenient, but less secure as others may have access to the mount.
 
