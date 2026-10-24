@@ -55,11 +55,11 @@ S2S3 can implement copying, but that would reduce its flexibility. Flexibility s
   - Enumerate buckets with millions of objects
   - Database/dataset operations are relatively light and not specifically tested for performance and scale
 
-Even at a small scale, inventory building (i.e. "share enumeration" and "bucket list") speed is 8,000 files and 3,000 objects per second.
+Even at a small scale, inventory building (i.e. "share enumeration" and "bucket listing") speed is 8,000 files (NFS) and 3,000 objects (S3) per second.
 
 Copy/sync performance depends on Rclone, not on S2S3, but in reality it is usually constrained by the source or target.
 
-S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each inventory is independent of all others. It will take long to enumerate large buckets (especially if the object store is slower than S2S3) and very large directories, but it should complete jobs in non-extreme scenarios.
+S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each inventory is independent of all others. It will take a long time to enumerate large buckets (especially if the object store is slower than S2S3) and very large directories, but it should complete jobs in non-extreme scenarios.
 
 ## Workflow
 
