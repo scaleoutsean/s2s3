@@ -6,14 +6,29 @@ from Releases.
 
 Initial implementation supports NFSv3 sources.
 
+## How it works
+
+S2S3 works the same way most people do this manually.
+
+![S2S3](./images/s2s3-00-diagram.png)
+
+- t0 - create initial inventory and the first copy to S3 bucket
+- t1, t2 - optional (full) inventory with incremental sync-copy
+- t3 - make the NFS share read-only, ceate final full inventory of the source
+- t4 - final incremental sync, verification run, optional creation of full inventory of both source and destination for compliance or record-keeping
+
+As shown in the diagram, copy/sync operations are handled by an external utility, such as Rclone, but file lists can be pased to any. 
+
+S2S3 can implement copying but that would also take away the flexibility. Flexibility seems more valuable than convenience, and canned examples of Rclone-associated steps are included in S2S3 documentation.
+
 ## Workflow
 
-- Calibrate to find optimal number of threads
-- Initial sync
-- Incremental sync (one or more)
-- Final sync from NAS (read-only exports)
-- Verification
-- Switch-over (ACLs expanded to allow other users)
+- Calibrate to find the optimal workload for NFS and S3
+- Build inventory and perform the initial coipy
+  - Perform additional rounds of "full inventory & incremental sync" if needed
+- Final full inventory on read-only NAS export, and incremental sync from NAS
+- Verification and report
+- Switch-over (S3 ACLs are modified to allow S3 modify actions to other users)
 
 ## Build inventory
 
