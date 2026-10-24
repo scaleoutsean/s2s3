@@ -86,7 +86,7 @@ On the client, S2S3's work is cheap. Servers' work is not. You need to carefully
 
 **S3:** S2S3's enumeration of S3 buckets is single-threaded and lab results show around 3,000 objects listed per second. If that level can impact your StorageGRID, ask your StorageGRID admin or other infrastructure person to configure [Traffic Classification](https://docs.netapp.com/us-en/storagegrid/admin/managing-traffic-classification-policies.html) for the S2S3 (tenant) account, the S2S3 IP, the bucket(s)...
 
-**End-to-end:** Inventories are built separately, so the are independent. For copy/sync, find balanced settings that work well with both the source and destination of migration. Put operations to S3 are likely going to be slower than NFS reads (especially with sub-1MiB NFS files), so Rclone shouldn't try to push harder than necessary - it won't work anyway.
+**End-to-end:** Inventories are built separately, so they are not inter-dependent. For copy/sync, find balanced settings that work well with both the source and destination of migration. Put operations to S3 are likely going to be slower than NFS reads (especially with sub-1MiB NFS files), so Rclone shouldn't try to push harder than necessary - it won't work anyway.
 
 ## Build inventory
 
