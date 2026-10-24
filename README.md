@@ -391,7 +391,7 @@ s2s3 verify --source ./test-inc-01 --target s131:dst \
   --mode deep 
 ```
 
-This *downloads* everything from S3 destination that's inventoried in `test-inc-01`!
+This *downloads* everything from S3 destination that's inventoried in `test-inc-01`! Only to RAM, but it may amount to tens of TBs and take hours.
 
 It also reads everything from NFS, and compares source source with S3 in "one-way" fashion (makes sure Source-to-Destination is good, not that whatever may have been added on S3 exists on NFS).
 
@@ -443,7 +443,7 @@ Data is the same, but only inventory creates it, so it's called differently.
 In the case `diff` vs. `verify` is confusing:
 
 - `nas-to-s3`: "lite" verify mode; S2S3 inventory-based check based on file/object size
-- `deep`: "heavy" verify mode; S2S3 downloads the entire bucket (not to disk) to checksum against checksums of files in the source NAS share
+- `deep`: "heavy" verify mode; S2S3 downloads the entire bucket (not to disk) to checksum each object and compare it with the checksum in the originating source NAS share
 - `diff`: source-to-source planning that also uses mtime changes to detect same-size modifications
 
 ### Small scale checks
