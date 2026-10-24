@@ -16,7 +16,7 @@
     - [Initial copy](#initial-copy)
     - [Sync - propagate source changes to S3](#sync---propagate-source-changes-to-s3)
   - [Export inventory](#export-inventory)
-    - [Copy vs Sync](#copy-vs-sync)
+  - [Copy vs Sync](#copy-vs-sync)
   - [Verify](#verify)
   - [Report](#report)
   - [Other notes](#other-notes)
@@ -249,7 +249,7 @@ This is now easy to process with Rclone. Use `rclone sync` for that and feed it 
 
 Sync is like StorageGRID Cloud Mirror: it doesn't know what may have been added at the destination. It cannot know what object has been overwritten or deleted by others. Keep the destination read-only for non-S2S3 users if you don't want to deal with problems caused by random out-of-band activity on S3.
 
-Even for `rclone sync` done right, you *need to think* about the consequences of using sync. See the **Copy vs. Sync** section below.
+Even for `rclone sync` done right, you *need to think* about the consequences of using sync. See the **Copy vs Sync** section below.
 
 ## Export inventory
 
@@ -305,9 +305,9 @@ Example:
 }
 ```
 
-### Copy vs Sync
+## Copy vs Sync
 
-During migration, regular users are normally not allowed to modify the destination.
+During a migration, regular users are normally not allowed to modify the destination before switch-over.
 
 But you may have a situation where applications need to be tested, and they need to delete or add data. In this situation you may need to use `rclone copy` and even perform more extensive planning.
 
@@ -331,7 +331,7 @@ Either way, command syntax is the same.
 
 Couple of reminders:
 - `sudo` is used if you haven't changed ownership of the inventory DB. `--rclone-config` makes sure Rclone knows where to find the config
-- If you changed ownership of `--source <db>`, you don't need `sudo` and `--rclone-config`:
+- If you've changed the ownership of database (`--source <db>`) since its creation, you don't need `sudo` and `--rclone-config`:
 
 ```sh
 sudo s2s3 verify \
