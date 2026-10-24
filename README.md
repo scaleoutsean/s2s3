@@ -82,7 +82,7 @@ Flags:
 **NOTE:** NFS does not require a mount point at this stage, but OS requires a sudoer, which then results in root ownership of the `db` directory. If you operate S2S3 as a regular user, run `sudo chown <db-directory>` after this step, so that you don't have to run subsequent steps as a sudoer. Rclone copy/sync requires NFS to be mounted, so you'll need `sudo` for that, but not for any other S2S3 operations.
 
 ```sh
-$ sudo s2s3 inventory nfs://192.168.1.194/mnt/nfs-test \
+sudo s2s3 inventory nfs://192.168.1.194/mnt/nfs-test \
   --reserved-port --uid "$(id -u)" --gid "$(id -g)" \
   --db ./test-inc-01 --threads 2 --timeout 30s
 ```
@@ -97,7 +97,7 @@ If you don't want non-sudoers to be able to access this data, you can skip this 
 
 ### Pre-flight checks
 
-Different actions are required for different use of S3. You can try these before you fly.
+Different actions are required for different use of S3. You can try one or more of these before you fly.
 
 ```sh
 s2s3 preflight s3://bucket/prefix --mode list
@@ -118,18 +118,20 @@ Normally, we'd inventory an entire bucket, but you can also perform prefix-based
 Prefix-based enumeration on StorageGRID 12.1 or Versity S3 Gateway 1.9.0:
 
 ```sh
-$ # load from .env or add AWS_ACCESS_KEY_ID=<str> AWS_SECRET_ACCESS_KEY=<str>
-$ s2s3 inventory s3://<bucket>/<prefix>/ \
+# load S3 creds from .env or add AWS_ACCESS_KEY_ID=<str> AWS_SECRET_ACCESS_KEY=<str>
+s2s3 inventory s3://<bucket>/<prefix>/ \
   --s3-endpoint https://host:port \
   --s3-path-style --timeout 30s \
   --db <inventory-dir>
 ```
 
-Notice there's no `sudo` here. S3 doesn't require it. S2S3 needs the S3 credentials - that's not optional. The port for StorageGRID is usually 10443 and Versity S3 Gateway 7070. Do not use HTTP as not just TBs of data could leak, but your credentials could be compromised as well.
+Notice there's no `sudo` here. S3 doesn't require it.
+
+S2S3 needs the S3 credentials (that's not optional). The port for StorageGRID is usually 10443 and Versity S3 Gateway 7070. Do not use HTTP as not just TBs of data could leak, but your credentials could be compromised as well.
 
 ### SMB inventory
 
-SMB is not currently supported.
+SMB is not yet implemented. It may be, depending on opportunities.
 
 ## Copy NAS data to S3
 
@@ -172,10 +174,10 @@ rclone copy \
 
 ```sh
 # inventory the S3 target bucket after NAs-to-S3 sync
-./s2s3 inventory s3://dst --db ./s3-t0 ...
+s2s3 inventory s3://dst --db ./s3-t0 ...
 
 # compare
-./s2s3 verify --source ./test-t0 --target ./s3-t0
+s2s3 verify --source ./test-t0 --target ./s3-t0
 ```
 
 Most users leave NFS share in use and take time to examine the target, compare NAS share with S3 and may perform multiple rounds of "inventory & sync" to keep the size of the last sync smaller. That's next.
@@ -187,7 +189,7 @@ If your NFS share is still open for writing by now, you can perform checks on th
 **Sync** data with `rclone sync`. To know what to sync, we use `s2s3 diff` with two inventory data sets: `--before` is the previous, and `--after` is the updated (latest, named `test-inc-01`):
 
 ```sh
-$ s2s3 diff --before ./test-t0 --after ./test-inc-01 \
+s2s3 diff --before ./test-t0 --after ./test-inc-01 \
   --copy-list ./test-inc-01-copy-filelist.txt \
   --delete-list ./test-inc-01-delete-filelist.txt
 ```
@@ -219,7 +221,7 @@ Notice how `export` gives a full list, so you need to use `rclone copy`, while `
 If you used the Rclone option you could do something like:
 
 ```sh
-$ rclone copy \
+rclone copy \
   --files-from-raw ./t0-files.txt \
   /tmp/nfs-test \
   s131:dst \
@@ -230,7 +232,7 @@ $ rclone copy \
 There's also `diff`:
 
 ```sh
-$ s2s3 diff \
+s2s3 diff \
   --before ./test-t0 \
   --after ./test-t1 \
   --copy-list ./copy.txt \
@@ -285,7 +287,7 @@ Couple of reminders:
 - If you changed ownership of `--source <db>`, you don't need `sudo` and `--rclone-config`:
 
 ```sh
-$ sudo ./bin/s2s3 verify \
+sudo s2s3 verify \
   --mode deep \
   --source ./test-inc-01 \
   --target s131:dst \
@@ -366,7 +368,7 @@ s2s3 verify \
 Switch-over report:
 
 ```sh
-$ rclone check \
+rclone check \
   /tmp/nfs-test \
   s131:dst \
   --download \
@@ -389,9 +391,9 @@ Data is the same, but only inventory creates it, so it's called differently.
 
 ### Small scale checks
 
-If you want to check a statistically significant sample (e.g. 99.99% confidence, 5% margin of error) from 50% of NFS share content that has 1,000,000 files, you may check 1,151 files instead. 
+If you want to check a statistically significant sample (e.g. 99.99% confidence, 5% margin of error) from 50% of NFS share content that has 1,000,000 files, you may check 1,151 files instead.
 
-In order to avoid doing "light" (inventory to inventory, which may be wrong) or "deep" on 1,000,000 objects (which may be wasteful), you can get exaport a sample and check those files any way you want.
+In order to avoid doing "light" (inventory to inventory, which may be outdated or less reliable) or "deep" on 1,000,000 objects (which may be wasteful), you can get export a sample and check those files any way you want.
 
 ```sh
 $ s2s3 export --dataset ./test-t2 --output ./all-files.txt
