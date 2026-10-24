@@ -2,8 +2,9 @@
 
 - [S2S3 - Share-to-S3 tool for NAS migration to S3](#s2s3---share-to-s3-tool-for-nas-migration-to-s3)
   - [How it works](#how-it-works)
+  - [Scale](#scale)
   - [Workflow](#workflow)
-  - [Calibrate](#calibrate)
+  - [Calibrate source and target](#calibrate-source-and-target)
   - [Build inventory](#build-inventory)
     - [Data set naming conventions](#data-set-naming-conventions)
     - [NFS v3 inventory](#nfs-v3-inventory)
@@ -41,9 +42,24 @@ S2S3 works the same way most people do this manually.
 - t3 - make the NFS share read-only, ceate final full inventory of the source
 - t4 - final incremental sync, verification run, optional creation of full inventory of both source and destination for compliance or record-keeping
 
-As shown in the diagram, copy/sync operations are handled by an external utility, such as Rclone but file lists can be pased to any program, making it possible to use highly specialized copy tools where required.
+As shown in the diagram, copy/sync operations are handled by an external utility, such as Rclone, but file lists can be passed to any program, making it possible to use highly specialized copy tools where required or beneficial.
 
 S2S3 can implement copying, but that would reduce its flexibility. Flexibility seems more valuable than convenience, but convenience is retained by using one reference tool with canned examples for common workflows included in the S2S3 documentation. 
+
+## Scale
+
+- NAS and S3 are expected to handle S2S3's requests
+- S2S3 tested for key client-side characteristics:
+  - Enumerate NAS shares with many millions of files
+  - Enumerate single NAS share with 500,000 files
+  - Enumerate buckets with millions of objects
+  - Database/dataset operations are relatively light and not specifically tested for performance and scale
+
+Even at a small scale, inventory building (i.e. "share enumeration" and "bucket list") speed is 8,000 files and 3,000 objects per second.
+
+Copy/sync performance depends on Rclone, not on S2S3, but in reality it is usually constrained by the source or target.
+
+S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each inventory is independent of all others. It will take long to enumerate large buckets (especially if the object store is slower than S2S3) and very large directories, but it should complete jobs in non-extreme scenarios.
 
 ## Workflow
 
@@ -54,7 +70,7 @@ S2S3 can implement copying, but that would reduce its flexibility. Flexibility s
 - Verification and report
 - Switch-over (S3 ACLs are modified to allow S3 modify actions to other users)
 
-## Calibrate
+## Calibrate source and target
 
 On the client, S2S3's work is cheap, but server work is not. You need to carefully consider the workload S2S3 creates:
 - Source: directory listing (inventory), reads (copy/sync)
@@ -406,7 +422,7 @@ rclone check \
   --download \
   --one-way \
   --combined ./rclone-check-combined.txt \
-  --log-file ./rclone-check.log \
+  --log-file ./rclone-check.log
 ```
 
 You may want to create a bucket for these reports (e.g. `s3://migration-reports`, with Versioning and Object Lock) and upload reports there to mark migration completed and keep track of the switch-over state. 
