@@ -1,5 +1,30 @@
 # S2S3 - Share-to-S3 tool for NAS migration to S3
 
+- [S2S3 - Share-to-S3 tool for NAS migration to S3](#s2s3---share-to-s3-tool-for-nas-migration-to-s3)
+  - [How it works](#how-it-works)
+  - [Workflow](#workflow)
+  - [Calibrate](#calibrate)
+  - [Build inventory](#build-inventory)
+    - [Data set naming conventions](#data-set-naming-conventions)
+    - [NFS v3 inventory](#nfs-v3-inventory)
+    - [S3 inventory](#s3-inventory)
+    - [Pre-flight checks](#pre-flight-checks)
+    - [Build after initial sync](#build-after-initial-sync)
+    - [SMB inventory](#smb-inventory)
+  - [Copy NAS data to S3](#copy-nas-data-to-s3)
+    - [Initial copy](#initial-copy)
+    - [Sync - propagate source changes to S3](#sync---propagate-source-changes-to-s3)
+  - [Export inventory](#export-inventory)
+    - [Copy vs Sync](#copy-vs-sync)
+  - [Verify](#verify)
+  - [Report](#report)
+  - [Other notes](#other-notes)
+    - [Database vs dataset](#database-vs-dataset)
+    - [Diff vs Verify (NAS-to-S3, Deep)](#diff-vs-verify-nas-to-s3-deep)
+    - [Small scale checks](#small-scale-checks)
+  - [Privacy and T\&C](#privacy-and-tc)
+
+
 S2S3 can help you quickly migrate small-to-medium NFSv3 shares to NetApp StorageGRID 
 and Versity S3 Gateway with E-Series buckets. It is also very affordable - download it for free from Releases.
 
@@ -79,7 +104,7 @@ Flags:
       --uid uint32              AUTH_SYS user ID (default 1000)
 ```
 
-**NOTE:** NFS does not require a mount point at this stage, but OS requires a sudoer, which then results in root ownership of the `db` directory. If you operate S2S3 as a regular user, run `sudo chown <db-directory>` after this step, so that you don't have to run subsequent steps as a sudoer. Rclone copy/sync requires NFS to be mounted, so you'll need `sudo` for that, but not for any other S2S3 operations.
+**Note:** NFS does not require a mount point at this stage, but OS requires a sudoer, which then results in root ownership of the `db` directory. If you operate S2S3 as a regular OS user, run `sudo chown <uid>:<gid> -R <db-directory>` after this step, so that you don't have to run subsequent steps as a sudoer. Rclone copy/sync requires a mounted NAS share, so you'll need `sudo` for make that happen, but not for any other S2S3 operations.
 
 ```sh
 sudo s2s3 inventory nfs://192.168.1.194/mnt/nfs-test \
@@ -88,9 +113,11 @@ sudo s2s3 inventory nfs://192.168.1.194/mnt/nfs-test \
 ```
 
 After this, I choose change data directory ownership to my user:
+
 ```sh
 sudo chown -R sean:sean ./test-inc-01
 ```
+
 If you don't want non-sudoers to be able to access this data, you can skip this step.
 
 ### S3 inventory
@@ -100,14 +127,17 @@ If you don't want non-sudoers to be able to access this data, you can skip this 
 Different actions are required for different use of S3. You can try one or more of these before you fly.
 
 ```sh
+# load S3 creds from .env or add AWS_ACCESS_KEY_ID=<str> AWS_SECRET_ACCESS_KEY=<str>
 s2s3 preflight s3://bucket/prefix --mode list
 s2s3 preflight s3://bucket/prefix --mode copy
 s2s3 preflight s3://bucket/prefix --mode sync
 ```
 
-To build an inventory you just need to be able to `list`. Later, as we copy and sync, we will need more. Non-S2S3 users should at most have list access, with correct ACLs (not wide open to Anonymous or "any account user").
+To build an inventory you just need to be able to `list`. Later, as we copy and sync, we will need more.
 
-**Note:** you should also read **Copy vs. Sync** below, before you begin.
+**IMPORTANT NOTES:** 
+- Non-S2S3 users should at most have list access, with correct ACLs (not wide open to Anonymous or "any tenant account/user"). Use tenant root or designated migration account for S2S3
+- You should also read **Copy vs. Sync** below, before you begin.
 
 ### Build after initial sync
 
@@ -229,7 +259,7 @@ rclone copy \
   --checkers 1
 ```
 
-There's also `diff`:
+There's also `diff`, mentioned above:
 
 ```sh
 s2s3 diff \
@@ -316,10 +346,10 @@ Example result:
   "verification_method": "size",
   "verification_executor": "s2s3",
   "matched": 225000,
-  "missing": 7,
+  "missing": 1,
   "unexpected": 0,
   "size_mismatch": 0,
-  "source_rows": 225007,
+  "source_rows": 225001,
   "target_rows": 225000,
   "examples": [
     "missing: skewed/d000000000/d000000000/d000000000/d000000000"
@@ -332,6 +362,8 @@ Example result:
 ```
 
 This tells us if S2S3 **inventories** match. Does it tell us the source and destination data match? Not necessarily.
+
+Notice (in JSON above) that `verification_method=size`. So that method uses size. If the S2S3 user is the only user, that's often good enough, especially for incremental verification.
 
 There's a way to check harder, but it costs more to execute.
 
@@ -348,7 +380,7 @@ It also reads everything from NFS, and compares source source with S3 in "one-wa
 
 Deep mode is expensive, but maybe acceptable for the final verification or iterative verification of sub-100TB buckets (depending on your environment).
 
-**NOTE:** It's not just a matter of "best practice" to not overuse `deep`, but `deep` can't work well when the *source is still live*. As long as the NAS source is being updated, you'd usually get a massive amount of failures on every run.
+**NOTE:** Not overusing `deep` is not just a matter of "best practice". `deep` can't work well when the *source is still live*. As long as the NAS source is being updated, you'd usually get a massive amount of verification failures every time.
 
 ## Report
 
@@ -388,6 +420,14 @@ If you enabled Versioning or ILM on the bucket before migration was done (not re
 `inventory` creates a `db`, while other commands refer to the same data as `dataset`.
 
 Data is the same, but only inventory creates it, so it's called differently.
+
+### Diff vs Verify (NAS-to-S3, Deep)
+
+In the case `diff` vs. `verify` is confusing:
+
+- `nas-to-s3`: "lite" verify mode; S2S3 inventory-based check based on file/object size
+- `deep`: "heavy" verify mode; S2S3 downloads the entire bucket (not to disk) to checksum against checksums of files in the source NAS share
+- `diff`: source-to-source planning that also uses mtime changes to detect same-size modifications
 
 ### Small scale checks
 
