@@ -261,7 +261,7 @@ s2s3 export --dataset ./test-inc-01 --output ./test-inc-01-filelist.txt
 # s2s3 export --dataset ./test-t0 --format rclone-files-from --output ./t0-files.txt
 ```
 
-As mentioned earlier: you wouldn't use `rclone copy` for re-sync, but you could. If you use `rclone copy`, you don't even need this list or S2S3. But then you also don't have a list - you need to create and maintain it with Rclone and that's perfectly fine, but it seems more complicated to me.
+As mentioned earlier: you wouldn't use `rclone copy` for re-sync, but you could. If you use `rclone copy`, you don't even need this list or S2S3. But then you also don't have a list - you need to create and maintain it with Rclone (not to copy, but for reporting and record-keeping) and that's perfectly fine, but it seems more complicated to me.
 
 Notice how `export` gives a full list, so you need to use `rclone copy`, while `diff` gives two lists, so we can use `rclone sync`. 
 
