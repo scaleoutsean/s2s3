@@ -154,7 +154,7 @@ s2s3 preflight s3://bucket/prefix --mode copy
 s2s3 preflight s3://bucket/prefix --mode sync
 ```
 
-To build an inventory you just need to be able to `list`. Later, as we copy and sync, we will need more.
+To build an inventory you just need to be able to `list`. Later, as we copy and sync, we will need more. If you wanted to micro-manage, you could set up more than one tenant account.
 
 **IMPORTANT NOTES:** 
 
