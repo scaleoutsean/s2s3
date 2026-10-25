@@ -133,7 +133,7 @@ sudo s2s3 inventory nfs://192.168.1.194/mnt/nfs-test \
   --db ./test-inc-01 --threads 2 --timeout 30s
 ```
 
-After this, I choose change data directory ownership to my user:
+After this, I choose to change data directory ownership to my user:
 
 ```sh
 sudo chown -R sean:sean ./test-inc-01
