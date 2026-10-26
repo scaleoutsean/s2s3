@@ -68,11 +68,11 @@ Some extra musings can be [found in my inaugural S2S3 blog post](http://scaleout
 ## Workflow
 
 - Calibrate to find the optimal workload for NFS and S3
-- Build inventory and perform the initial coipy
-  - Perform additional rounds of "full inventory & incremental sync" if needed
-- Final full inventory on read-only NAS export, and incremental sync from NAS
-- Verification and report
-- Switch-over (S3 ACLs are modified to allow S3 modify actions to other users)
+- Build inventory and perform the initial copy
+  - Perform additional rounds of "full inventory + incremental sync" if needed
+- Final full inventory on a *read-only* NAS export, and an incremental sync from NAS to S3
+- Verification and (if needed) report
+- Switch-over (S3 ACLs need to be  modified to allow S3 modify actions to other users)
 
 ## Calibrate source and target
 
@@ -311,7 +311,7 @@ During a migration, regular users are normally not allowed to modify the destina
 
 But you may have a situation where applications need to be tested, and they need to delete or add data. In this situation you may need to use `rclone copy` and even perform more extensive planning.
 
-For example, it is better to make a copy for testing in different test bucket, than modify a workflow to work around whatever unpredictable stuff happens when a target is live before migration is done. `export` lets you get a list that you can use to copy a subset of data to a separate bucket and perform pre-switchover testing there. 
+For example, it is better to make a copy for testing in different test bucket, than modify a workflow to work around whatever unpredictable stuff happens when a target is live before migration is done. `export` lets you get a list that you can use to copy a subset of data to a separate bucket and perform pre-switchover testing there. You can also use my [sg-cosi or SGII](https://github.com/scaleoutsean/sg-cosi/) utility to create writable or read-only bucket snapshots for testing for free. Or do that from the StorageGRID UI.
 
 Another example: if your application requires or uses Versioning or Object Lock, you probably don't want to allow Put/Delete on objects before switch-over. But if the application requires Versioning, that also means you can't test before switch-over. Therefore:
 - Good: use a test bucket for pre-switch-over testing. Enable Versioning, Object Lock, ILM when it suits your business requirements.
