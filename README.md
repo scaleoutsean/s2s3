@@ -257,8 +257,6 @@ You don't have to use this one, but you can. If you need to export stuff from a 
 
 ```sh
 s2s3 export --dataset ./test-inc-01 --output ./test-inc-01-filelist.txt
-# option for for rclone use
-# s2s3 export --dataset ./test-t0 --format rclone-files-from --output ./t0-files.txt
 ```
 
 As mentioned earlier: you wouldn't use `rclone copy` for re-sync, but you could. If you use `rclone copy`, you don't even need this list or S2S3. But then you also don't have a list - you need to create and maintain it with Rclone (not to copy, but for reporting and record-keeping) and that's perfectly fine, but it seems more complicated to me.
