@@ -12,6 +12,7 @@
     - [Pre-flight checks](#pre-flight-checks)
     - [Build inventory after initial copy](#build-inventory-after-initial-copy)
     - [SMB inventory](#smb-inventory)
+  - [Check NAS directory/file to S3 key mapping](#check-nas-directoryfile-to-s3-key-mapping)
   - [Copy NAS data to S3](#copy-nas-data-to-s3)
     - [Initial copy](#initial-copy)
     - [Sync - propagate source changes to S3](#sync---propagate-source-changes-to-s3)
@@ -23,6 +24,8 @@
     - [Database vs dataset](#database-vs-dataset)
     - [Diff vs Verify (NAS-to-S3, Deep)](#diff-vs-verify-nas-to-s3-deep)
     - [Small scale checks](#small-scale-checks)
+    - [One-shot copy example](#one-shot-copy-example)
+    - [Pick your adventure (canned examples)](#pick-your-adventure-canned-examples)
   - [Privacy and T\&C](#privacy-and-tc)
 
 
@@ -79,7 +82,7 @@ Some extra musings can be [found in my inaugural S2S3 blog post](http://scaleout
 On the client, S2S3's work is cheap. Servers' work is not. You need to carefully consider the workload S2S3 creates:
 
 - On source: directory listing (inventory), reads (copy/sync)
-- On sarget: Put (and some delete) workload (copy/sync), bucket enumeration (inventory, comparison, report)
+- On target: Put (and some delete) workload (copy/sync), bucket enumeration (inventory, comparison, report)
 - On S2S3 client: small workload (write/read Parquet DB files)
 
 **NFS:** S2S3 lets you specify the number of threads used to scan a NAS share. Two is usually enough (lab testing shows 8,000 files listed per second), but can impact other NAS workloads, so try one thread as the minimum and evaluate more as necessary. Rclone, used to read data from the source (NAS share) lets you specify the number of threads used in copy/sync/verify`q operations. 
@@ -178,7 +181,46 @@ S2S3 needs the S3 credentials (that's not optional and should be verified with p
 
 ### SMB inventory
 
-SMB is not yet implemented. It may be in the future, depending on opportunities.
+Limited SMB support is available since v0.2.0:
+- Windows Server 2025
+- SMB 3.1.1 protocol only
+- Windows (not Linux) SMB client
+- UNC path is available, the S2S3 user is authenticated and has required permissions to access files in the share
+
+```powershell
+.\s2s3_windows_amd64.exe inventory '\\server\share' \
+  --db .\smb-test-001 --threads 2
+```
+
+Windows support may be improved the future, depending on opportunities.
+
+## Check NAS directory/file to S3 key mapping
+
+Does your NAS share have weird names? Of course it does!
+
+You should ask users to modify them on their own, but if it's too late for that, at least you can detect them beforehand:
+
+```sh
+s2s3 check-compat \
+  --dataset ./smb-test-002 --target s3 \
+  --target-prefix 'migration/' \
+  --report ./compat-findings.jsonl \
+  --strict
+```
+
+Strict checks include "you can do that, but it may break S3 apps" types of situations. For example, `\\192.168.1.25\s2s3share\test 日本\test.txt` would cause a warning due to a space in directory name.
+
+Report contents:
+
+- Blockers: invalid UTF-8, keys exceeding 1,024 bytes.
+- Warnings: names requiring special handling by downstream applications.
+- Export limitations: names such as those containing newlines that our current file-list format cannot represent safely.
+
+Please check the AWS S3 documentation on unsupported, and unrecommended characters in S3 key names.
+
+**TIP:** Once the inventory database is ready, you can copy it to Linux and run the rest of it from Linux - `check-compat`, `export`, `diff`, and `verify --mode lite` (as this mode doesn't require native access to the share).  On Linux, mount the same SMB 3 share read-only and use that mount as `--source-root`, with the same relative directory layout.
+
+Otherwise, you could run other S2S3 commands on Windows as well; create Rclone configuration file, have Rclone ready and provide `--rclone-bin`, `--rclone-config` if you run other steps on Windows.
 
 ## Copy NAS data to S3
 
@@ -315,7 +357,7 @@ Another example: if your application requires or uses Versioning or Object Lock,
 - Good: use a test bucket for pre-switch-over testing. Enable Versioning, Object Lock, ILM when it suits your business requirements.
 - **Bad:** enable Versioning for testing during migration iterations, prepare scripts to delete non-current versions before switch-over, and let ILM cleanse them. Use `rclone copy` to overwrite changed or new objects.
 
-Even if you use `rclone sync` (i.e. not one-shot copy), if Versioning or Compliance Mode are enabled before switch-over you can end up with versions of objects that you don't want - maybe they take up TBs of space - or may be undesirable - but you won't be able to delete them. You also won't be able to remove the bucket (due to Compliance mode).
+Even if you use `rclone sync` (i.e. not one-shot copy), if Versioning or Compliance Mode are enabled before switch-over you can end up with non-current versions of objects that you don't want - maybe they take up TBs of space - or may be undesirable - but you won't be able to delete them. You also won't be able to remove the bucket (due to Compliance mode).
 
 ## Verify
 
@@ -323,30 +365,30 @@ S2S3 doesn't enumerate S3 for migration from S3, but if we want to compare the s
 
 At this point, we assume that you've either performed one-shot copy (rclone copy) or one (or more) incremental sync(s). Consider this: `test-inc-01` indicates that is my second sync (after the initial):
 - I am either verifying as a matter of routine, after each incremental run, or
-- I made my NAS share read-only right after creating `test-t0` inventory of `test-nfs`, then I ran one-shot `rcsync copy` and `test-inc-01` was created as the final inventory of NFS. I then created an inventory of the S3 destination, `test-inc-s3-01` (notice how confusing these names can get)
+- I made my NAS share read-only after creating `test-t0` inventory of `test-nfs`, then I ran one-shot `rcsync copy` and `test-inc-01` was created as the final inventory of NFS. I then created an inventory of the S3 destination, `test-inc-s3-01` (notice how confusing these names can get) and now want to compare the last inventory from each (source and destination)
 
 Either way, command syntax is the same. 
 
 Couple of reminders:
 - `sudo` is used if you haven't changed ownership of the inventory DB. `--rclone-config` makes sure Rclone knows where to find the config
-- If you've changed the ownership of database (`--source <db>`) since its creation, you don't need `sudo` and `--rclone-config`:
+- If you've changed the ownership of inventory databases (`--source <db>`) since its creation, you don't need to use `sudo` and `--rclone-config`:
 
 ```sh
 sudo s2s3 verify \
-  --mode deep \
-  --source ./test-inc-01 \
-  --target s131:dst \
-  --source-root /tmp/nfs-test \
+  --source ./test-inc-01 --source-root /tmp/nfs-test \
+  --target s131:dst \  
   --rclone-config /home/sean/.config/rclone/rclone.conf \
   --combined ./rclone-check.combined \
-  --log-file ./rclone-check.log
+  --log-file ./rclone-check.log \
+  --mode deep
 ```  
 
 Simple example:
 
 ```sh
-s2s3 verify --source ./test-inc-01 --target ./test-inc-s3-01 \
- --mode nfs-to-s3
+s2s3 verify --source ./test-inc-01 \
+ --target ./test-inc-s3-01 \
+ --mode lite # in v0.1.0 it was nfs-to-s3
 ```
 
 This compares the contents of two inventories, NFS and S3, verify the assumption that the inventories should match.
@@ -380,12 +422,13 @@ This tells us if S2S3 **inventories** match. Does it tell us the source and dest
 
 Notice (in JSON above) that `verification_method=size`. So that method uses size. If the S2S3 user is the only user, that's often good enough, especially for incremental verification.
 
-There's a way to check harder, but it costs more to execute.
+There's a way to check harder, but it costs more to execute. `--source-root` is required here, because unlike in `nfs-to-s3` mode, we need to read from NFS.
 
 ```sh
-s2s3 verify --source ./test-inc-01 --target s131:dst \
-  --source-root /tmp/nfs-test   
-  --combined ./rclone-check.combined --log-file ./rclone-check.log \
+s2s3 verify --source ./test-inc-01 --source-root /tmp/nfs-test \
+  --target s131:dst \
+  --combined ./rclone-check.combined \
+  --log-file ./rclone-check.log \
   --mode deep 
 ```
 
@@ -397,22 +440,21 @@ Deep mode is expensive, but maybe acceptable for the final verification or itera
 
 **NOTE:** Not overusing `deep` is not just a matter of "best practice". `deep` can't work well when the *source is still live*. As long as the NAS source is being updated, you'd usually get a massive amount of verification failures every time.
 
+Another gotcha is `--target-prefix` must be followed by `/`.
+
+```sh
+s2s3 verify --mode lite \
+  --source ./smb-test-001 --target ./s3-inventory \
+  --target-prefix 'migration/'
+```
+
 ## Report
 
 Verify just verifies, it doesn't create a report. Reports may also be expensive.
 
-You'll probably run a more extensive report just before switch-over, after NAS shares are read only and the final sync or copy has been done.
+You probably run a more extensive report just before switch-over, after NAS shares are read only and the final sync or copy has been done.
 
-```sh
-s2s3 verify \
-  --mode deep \
-  --source ./test-t2 \
-  --target s131:dst \
-  --source-root /tmp/nfs-test \
-  --report ./deep-check.combined
-```
-
-Switch-over report:
+Pre switch-over check (one-way flavor):
 
 ```sh
 rclone check \
@@ -423,6 +465,14 @@ rclone check \
   --combined ./rclone-check-combined.txt \
   --log-file ./rclone-check.log
 ```
+
+What's the difference? `s2s3 verify --mode deep` runs `rclone check --download --one-way`, so the core check is the same, but it adds `--files-from-raw` using regular-file paths from the complete source inventory. The standalone command checks the whole mounted tree; deep mode checks only files recorded in `--source`. Both ignore destination-only files because of `--one-way`.
+
+Finally, depending on how you run this, you may need answers to different questions regardless of the tool:
+- **Did every source file arrive correctly?** Use one-way to check.
+- **Does the destination contain exactly the source set?** Use the default two-way check.
+
+If you (the S2S3 operator) freeze (make read-only) an NFS share before inventory generation used for the final copy/sync (depending on options), and you're the only user who can Put/Delete S3 destination, you may not need to check if the destination has extra files.
 
 You may want to create a bucket for these reports (e.g. `s3://migration-reports`, with Versioning and Object Lock) and upload reports there to mark migration completed and keep a record of switch-over state. 
 
@@ -454,6 +504,16 @@ In order to avoid doing "light" (inventory to inventory, which may be outdated o
 $ s2s3 export --dataset ./test-t2 --output ./all-files.txt
 $ shuf -n 1151 ./all-files.txt > ./sample-1151.txt
 ```
+
+### One-shot copy example
+
+This is for the TLDR crowd. As mentioned above, the assumption is step (3) from the diagram is the first step, i.e. one-shot migration with making the NFS source read-only, followed by step (1) (full inventory and copy), and step (4) (verify, report, switch-over).
+
+### Pick your adventure (canned examples)
+
+Even S2S3 may be confusing, but to me, Rclone is even more complicated.
+
+TODO
 
 ## Privacy and T&C
 
