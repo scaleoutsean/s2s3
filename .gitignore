@@ -4,3 +4,4 @@ release.sh
 releases/.env
 releases
 .env
+kraken.sh

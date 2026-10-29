@@ -27,6 +27,7 @@
     - [One-shot copy example](#one-shot-copy-example)
     - [Pick your adventure (canned examples)](#pick-your-adventure-canned-examples)
   - [Privacy and T\&C](#privacy-and-tc)
+  - [Release scan reports](#release-scan-reports)
 
 
 S2S3 can help you quickly migrate small-to-medium NFSv3 and SMB shares to NetApp StorageGRID and Versity S3 Gateway with E-Series buckets. It has no restrictions and it is also very affordable - download it for free from Releases.
@@ -547,3 +548,26 @@ TODO
 ## Privacy and T&C
 
 S2S3 is free to use. It has no telemetry, dial home, or other data collection.
+
+## Release scan reports
+
+Release scanning requires Python 3 and the [VirusTotal CLI](https://github.com/VirusTotal/vt-cli). Configure the CLI with `vt init`, or export `VT_API_KEY`. If the key is stored in your trusted local `.env`, load it with `set -a; source .env; set +a`. The scripts do not load `.env` automatically.
+
+Prepare the binaries and save their filenames, then scan those files:
+
+```bash
+./release.sh > release-files.txt
+python3 vt.py < release-files.txt > release-notes.md
+```
+
+Alternatively, pass existing release files directly, or pipe the release script's output:
+
+```bash
+python3 vt.py releases/s2s3_linux_v0.2.0_b93af26_amd64 > release-notes.md
+set -o pipefail
+./release.sh | python3 vt.py > release-notes.md
+```
+
+The Python helper uploads the supplied files to VirusTotal and waits for results (up to 1,800 seconds per file; override with `--timeout`). Review VirusTotal's sharing policy before submitting non-public files. Progress and errors go to stderr; stdout contains only the Markdown table, and failures return a nonzero exit status without a partial table.
+
+The columns are filename, locally calculated SHA-256, positive count, detecting tools, VT report URL, and VT identifier. Positive count includes engines reporting **malicious or suspicious**, not a verdict that the file is malware. The VT identifier is the **file ID**, which is normally the same SHA-256, not the separate ID of an individual analysis. Clean reports show `0` positives and `-` for tools.
