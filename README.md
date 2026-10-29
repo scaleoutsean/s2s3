@@ -29,10 +29,9 @@
   - [Privacy and T\&C](#privacy-and-tc)
 
 
-S2S3 can help you quickly migrate small-to-medium NFSv3 shares to NetApp StorageGRID 
-and Versity S3 Gateway with E-Series buckets. It is also very affordable - download it for free from Releases.
+S2S3 can help you quickly migrate small-to-medium NFSv3 and SMB shares to NetApp StorageGRID and Versity S3 Gateway with E-Series buckets. It has no restrictions and it is also very affordable - download it for free from Releases.
 
-The initial implementation supports NFSv3 sources. Other sources (SMB, NFSv4) may be added later.
+The initial implementation supports NFSv3 and SMB 3 sources. Other sources (SMB 2, NFSv4) may (SMB 2) or may not (NFSv4) work. I may add more later, but for now you can share the share using a supported protocol and limit client access to S2S3.
 
 ## How it works
 
@@ -192,6 +191,15 @@ Limited SMB support is available since v0.2.0:
   --db .\smb-test-001 --threads 2
 ```
 
+Shockingly, you can do this (if you don't mind to use up to 3x more time):
+
+```powershell
+ .\s2s3_windows_amd64.exe inventory nfs://192.168.1.194/mnt/nfs-test `
+   --db 'c:\nfs-s194-004' `
+   --threads 1 `
+   --uid 1000 --gid 1000 --reserved-port
+ ```
+
 Windows support may be improved the future, depending on opportunities.
 
 ## Check NAS directory/file to S3 key mapping
@@ -210,17 +218,38 @@ s2s3 check-compat \
 
 Strict checks include "you can do that, but it may break S3 apps" types of situations. For example, `\\192.168.1.25\s2s3share\test 日本\test.txt` would cause a warning due to a space in directory name.
 
-Report contents:
+Report highlights:
 
 - Blockers: invalid UTF-8, keys exceeding 1,024 bytes.
 - Warnings: names requiring special handling by downstream applications.
 - Export limitations: names such as those containing newlines that our current file-list format cannot represent safely.
 
+```json
+{
+  "dataset": "smb-001",
+  "source_id": "//192.168.1.131/s2s3",
+  "target": "s3",
+  "target_prefix": "",
+  "strict": true,
+  "passed": true,
+  "s3_compatible": true,
+  "files_checked": 100010,
+  "skipped_rows": 35,
+  "affected_files": 0,
+  "blockers": 0,
+  "s3_blockers": 0,
+  "export_limitations": 0,
+  "warnings": 0,
+  "counts": {},
+  "examples": []
+}
+```
+
 Please check the AWS S3 documentation on unsupported, and unrecommended characters in S3 key names.
 
-**TIP:** Once the inventory database is ready, you can copy it to Linux and run the rest of it from Linux - `check-compat`, `export`, `diff`, and `verify --mode lite` (as this mode doesn't require native access to the share).  On Linux, mount the same SMB 3 share read-only and use that mount as `--source-root`, with the same relative directory layout.
+**TIP:** Once the inventory database is ready, you can copy it to Linux and run the rest of it from Linux - `check-compat`, `export`, `diff`, and `verify --mode lite` (as this mode doesn't require native access to the share). On Linux, mount the same SMB 3 share read-only and use that mount as `--source-root`, with the same relative directory layout.
 
-Otherwise, you could run other S2S3 commands on Windows as well; create Rclone configuration file, have Rclone ready and provide `--rclone-bin`, `--rclone-config` if you run other steps on Windows.
+Otherwise, you could run other S2S3 commands on Windows as well; create Rclone configuration file, have Rclone ready and provide `--rclone-bin`, `--rclone-config` if you run the rest of the steps on Windows.
 
 ## Copy NAS data to S3
 
