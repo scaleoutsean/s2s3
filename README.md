@@ -8,10 +8,10 @@
   - [Build inventory](#build-inventory)
     - [Data set naming conventions](#data-set-naming-conventions)
     - [NFS v3 inventory](#nfs-v3-inventory)
+    - [SMB inventory](#smb-inventory)
     - [S3 inventory](#s3-inventory)
     - [Pre-flight checks](#pre-flight-checks)
     - [Build inventory after initial copy](#build-inventory-after-initial-copy)
-    - [SMB inventory](#smb-inventory)
   - [Check NAS directory/file to S3 key mapping](#check-nas-directoryfile-to-s3-key-mapping)
   - [Copy NAS data to S3](#copy-nas-data-to-s3)
     - [Initial copy](#initial-copy)
@@ -53,16 +53,16 @@ Why not just use Rclone? Rcone is more powerful, but it's also overwhelming. I w
 
 ## Scale
 
-- NAS and S3 are expected to handle S2S3's requests
+- NAS and S3 are expected to handle S2S3's requests - you're responsible for not overloading them
 - S2S3 tested for key client-side characteristics:
   - Enumerate a NAS share with many millions of files
   - Enumerate a NAS directory with 500,000 files
   - Enumerate a bucket with millions of objects
   - Database/dataset operations are relatively light and not specifically tested for performance and scale
 
-Even at a small scale, S2S3's inventory building (i.e. "share enumeration" and "bucket listing") speed is 8,000 files (NFS) and 3,000 objects (S3) per second.
+Even at a small scale, S2S3's inventory building (i.e. "share enumeration" and "bucket listing") speed is 8,000 files (NFSv3, SMB 3) and 3,000 objects (S3) per second.
 
-Copy/sync performance depends on Rclone, not on S2S3, but in reality it is usually constrained by source and target performance.
+Copy/sync performance depends mostly on Rclone, not on S2S3, but in reality it is usually constrained by source and target performance.
 
 S2S3 should be able to handle inventories for 100 TB NAS shares and NAS systems with several such shares, given that each source-destination pair is independent of others. It takes a long time to enumerate large buckets (especially if the object store is slower than S2S3 client) and very large directories, but it should complete enumeration within scenarios outlined above.
 
@@ -86,6 +86,8 @@ On the client, S2S3's work is cheap. Servers' work is not. You need to carefully
 - On S2S3 client: small workload (write/read Parquet DB files)
 
 **NFS:** S2S3 lets you specify the number of threads used to scan a NAS share. Two is usually enough (lab testing shows 8,000 files listed per second), but can impact other NAS workloads, so try one thread as the minimum and evaluate more as necessary. Rclone, used to read data from the source (NAS share) lets you specify the number of threads used in copy/sync/verify`q operations. 
+
+**SMB:** It behaves similarly to NFSv3 - one thread is enough for thousands of objects per second and unlikely to impact SMB service for other clients. Two threads may work faster, but it may have impact on other users' directory navigation responsiveness, depending on your environment.
 
 **S3:** S2S3's enumeration of S3 buckets is single-threaded and lab results show around 3,000 objects listed per second. If that level can impact your StorageGRID, ask your StorageGRID admin or other infrastructure person to configure [Traffic Classification](https://docs.netapp.com/us-en/storagegrid/admin/managing-traffic-classification-policies.html) for the S2S3 (tenant) account, the S2S3 IP, the bucket(s)...
 
@@ -144,6 +146,29 @@ sudo chown -R sean:sean ./test-inc-01
 
 If you don't want non-sudoers to be able to access this data, you can skip this step.
 
+### SMB inventory
+
+Limited SMB support has been available since v0.2.0:
+- SMB 3.1.1 protocol only (tested with Windows Server 2025)
+- Windows (not Linux) SMB client
+- UNC path with SMB share is available, the S2S3 user is authenticated and has required permissions to access files in the share
+
+```powershell
+.\s2s3_windows_amd64.exe inventory '\\server\share' \
+  --db .\smb-test-001 --threads 2
+```
+
+Shockingly, you can do this (if you don't mind to use up to 3x more time):
+
+```powershell
+ .\s2s3_windows_amd64.exe inventory nfs://192.168.1.194/mnt/nfs-test `
+   --db 'c:\nfs-s194-004' `
+   --threads 1 `
+   --uid 1000 --gid 1000 --reserved-port
+ ```
+
+Windows support may be improved the future, depending on opportunities.
+
 ### S3 inventory
 
 ### Pre-flight checks
@@ -178,30 +203,6 @@ s2s3 inventory s3://<bucket>/<prefix>/ \
 ```
 
 S2S3 needs the S3 credentials (that's not optional and should be verified with pre-flight checks). HTTPS port for StorageGRID S3 API is usually 10443 and Versity S3 Gateway defaults to 7070. Do not use HTTP here as not just TBs of data could leak, but your credentials could end up compromised as well.
-
-### SMB inventory
-
-Limited SMB support is available since v0.2.0:
-- Windows Server 2025
-- SMB 3.1.1 protocol only
-- Windows (not Linux) SMB client
-- UNC path is available, the S2S3 user is authenticated and has required permissions to access files in the share
-
-```powershell
-.\s2s3_windows_amd64.exe inventory '\\server\share' \
-  --db .\smb-test-001 --threads 2
-```
-
-Shockingly, you can do this (if you don't mind to use up to 3x more time):
-
-```powershell
- .\s2s3_windows_amd64.exe inventory nfs://192.168.1.194/mnt/nfs-test `
-   --db 'c:\nfs-s194-004' `
-   --threads 1 `
-   --uid 1000 --gid 1000 --reserved-port
- ```
-
-Windows support may be improved the future, depending on opportunities.
 
 ## Check NAS directory/file to S3 key mapping
 
