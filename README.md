@@ -8,7 +8,7 @@
   - [Build inventory](#build-inventory)
     - [Data set naming conventions](#data-set-naming-conventions)
     - [NFS v3 inventory](#nfs-v3-inventory)
-    - [SMB inventory](#smb-inventory)
+    - [SMB 3 inventory](#smb-3-inventory)
     - [S3 inventory](#s3-inventory)
     - [Pre-flight checks](#pre-flight-checks)
     - [Build inventory after initial copy](#build-inventory-after-initial-copy)
@@ -32,7 +32,7 @@
 
 S2S3 can help you quickly migrate small-to-medium NFSv3 and SMB shares to NetApp StorageGRID and Versity S3 Gateway with E-Series buckets. It has no restrictions and it is also very affordable - download it for free from Releases.
 
-The initial implementation supports NFSv3 and SMB 3 sources. Other sources (SMB 2, NFSv4) may (SMB 2) or may not (NFSv4) work. I may add more later, but for now you can share the share using a supported protocol and limit client access to S2S3.
+The initial implementation supports NFSv3 and SMB 3 sources. Other sources (SMB 2, NFSv4) may (SMB 2) or may not (NFSv4) work. I may add more later, but for now you can share the share using a supported protocol and limit client access to S2S3. That is, if you're using NFSv4, create an NFSv3 share for S2S3 and proceed.
 
 ## How it works
 
@@ -146,7 +146,7 @@ sudo chown -R sean:sean ./test-inc-01
 
 If you don't want non-sudoers to be able to access this data, you can skip this step.
 
-### SMB inventory
+### SMB 3 inventory
 
 Limited SMB support has been available since v0.2.0:
 - SMB 3.1.1 protocol only (tested with Windows Server 2025)
@@ -158,7 +158,7 @@ Limited SMB support has been available since v0.2.0:
   --db .\smb-test-001 --threads 2
 ```
 
-Shockingly, you can do this (if you don't mind to use up to 3x more time):
+Shockingly, you can do this (if you don't mind useing up to 3x more time here than on Linux):
 
 ```powershell
  .\s2s3_windows_amd64.exe inventory nfs://192.168.1.194/mnt/nfs-test `
