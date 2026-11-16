@@ -157,7 +157,7 @@ Limited SMB support has been available since v0.2.0:
   --db .\smb-test-001 --threads 2
 ```
 
-Shockingly, you can do this (if you don't mind useing up to 3x more time here than on Linux):
+Shockingly, you can do this (if you don't mind using up to 3x more time here than on Linux):
 
 ```powershell
  .\s2s3_windows_amd64.exe inventory nfs://192.168.1.194/mnt/nfs-test `
